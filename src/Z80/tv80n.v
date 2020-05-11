@@ -27,7 +27,7 @@
 
 module tv80n (/*AUTOARG*/
   // Outputs
-  m1_n, mreq_n, iorq_n, rd_n, wr_n, rfsh_n, halt_n, busak_n, A, do, pc,
+  m1_n, mreq_n, iorq_n, rd_n, wr_n, rfsh_n, halt_n, busak_n, A, dout, pc,
   // Inputs
   reset_n, clk, wait_n, int_n, nmi_n, busrq_n, di
   );
@@ -53,7 +53,7 @@ module tv80n (/*AUTOARG*/
   output        busak_n; 
   output [15:0] A;
   input [7:0]   di;
-  output [7:0]  do;
+  output [7:0]  dout;
   output [15:0] pc;
 
   reg           mreq_n; 
@@ -97,7 +97,7 @@ module tv80n (/*AUTOARG*/
      .A (A),
      .dinst (di),
      .di (di_reg),
-     .do (do),
+     .dout (dout),
      .mc (mcycle),
      .ts (tstate),
      .intcycle_n (intcycle_n),
@@ -153,17 +153,17 @@ module tv80n (/*AUTOARG*/
     begin
       if (!reset_n)
         begin
-	  rd_n   <= #1 1'b1;
-	  wr_n   <= #1 1'b1;
-	  iorq_n <= #1 1'b1;
-	  mreq_n <= #1 1'b1;
+	  rd_n   <= 1'b1;
+	  wr_n   <= 1'b1;
+	  iorq_n <= 1'b1;
+	  mreq_n <= 1'b1;
         end
       else
         begin
-	  rd_n <= #1 nxt_rd_n;
-	  wr_n <= #1 nxt_wr_n;
-	  iorq_n <= #1 nxt_iorq_n;
-	  mreq_n <= #1 nxt_mreq_n;
+	  rd_n <=  nxt_rd_n;
+	  wr_n <=  nxt_wr_n;
+	  iorq_n <=  nxt_iorq_n;
+	  mreq_n <=  nxt_mreq_n;
 	end // else: !if(!reset_n)
     end // always @ (posedge clk or negedge reset_n)
 
@@ -171,12 +171,12 @@ module tv80n (/*AUTOARG*/
     begin
       if (!reset_n)
         begin
-	  di_reg <= #1 0;
+	  di_reg <= 0;
         end
       else
         begin
 	  if (tstate[2] && wait_n == 1'b1)
-	    di_reg <= #1 di;
+	    di_reg <=  di;
 	end // else: !if(!reset_n)
     end // always @ (posedge clk)
   
