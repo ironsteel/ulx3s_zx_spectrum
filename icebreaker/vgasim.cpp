@@ -188,8 +188,8 @@ void	VGASIM::operator()(const int vsync, const int hsync, const int r, const int
 
 		//assert((m_vsync_count <   m_mode.sync_lines() * m_mode.raw_width())||(vsync));
 		//assert( m_vsync_count <   m_mode.raw_height()*m_mode.raw_width());
-		assert((m_hsync_count <   m_mode.sync_pixels())||(hsync));
-		assert( m_hsync_count <   m_mode.raw_width());
+		//assert((m_hsync_count <   m_mode.sync_pixels())||(hsync));
+		//assert( m_hsync_count <   m_mode.raw_width());
 
 
 		yv = (m_vsync_count-m_hsync_count)/m_mode.raw_width();

@@ -6,13 +6,13 @@ module up5k_zx_ram(
   output [7:0] dout_a
 );
 
-wire cs_0 = !addr_a[14];
-wire cs_1 = addr_a[14];
+wire cs_0 = !addr_a[15];
+wire cs_1 = addr_a[15];
 wire [3:0] wren_mask = addr_a[0] == 0 ? 4'b0011 : 4'b1100;
 
 wire [15:0] wdata = addr_a[0] == 0 ? {8'b0, din_a} : {din_a, 8'b0};
 
-assign dout_a = addr_a[14] ? (addr_a[0] == 0 ? rdata_1[7:0] : rdata_1[15:8]) :
+assign dout_a = addr_a[15] == 1 ? (addr_a[0] == 0 ? rdata_1[7:0] : rdata_1[15:8]) :
                              (addr_a[0] == 0 ? rdata_0[7:0] : rdata_0[15:8]);
 wire [15:0] rdata_0;
 wire [15:0] rdata_1;

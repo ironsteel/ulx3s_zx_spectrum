@@ -11,14 +11,19 @@ module spectrum
   output [3:0] VGA_G,
   output [3:0] VGA_B,
 
-  output flash_sck,
-  output flash_csn,
-  output flash_mosi,
-  input flash_miso,
+  input  wire slave_mosi,
+  output wire slave_miso,
+  input  wire slave_cs_n,
+  input  wire slave_clk,
+`ifdef SIM
+  input ps2clk,
+  input ps2data,
+`endif
 
   input btn,
 
-  output LED0
+  output LED0,
+  output LED1
 );
 
   wire          n_WR;
@@ -45,38 +50,10 @@ module spectrum
   reg           old_ula_we;
   reg           sound;
 
-  reg [2:0]     cpuClockCount = 0;
   wire          cpuClock;
   wire          cpuClockEnable;
 
   assign VGA_CK = clk;
-
-  assign LED0 = done;
-
-  // ===============================================================
-  // ROM loader
-  // ===============================================================
-  wire [13:0] loader_write_addr;
-  wire [15:0] loader_write_data;
-  wire loader_write;
-  wire done;
-
-  flash_loader flash_load_i (
-    .clock(clk),
-    .reset(!clock_locked),
-    .reload(!btn),
-    .index({4'b0000}),
-    .loader_write_address(loader_write_addr),
-    .loader_write_data(loader_write_data),
-    .data_valid(loader_write),
-    .done(done),
-
-    //Flash load interface
-    .flash_csn(flash_csn),
-    .flash_sck(flash_sck),
-    .flash_mosi(flash_mosi),
-    .flash_miso(flash_miso)
-   );
 
   // ===============================================================
   // System Clock generation
@@ -114,11 +91,11 @@ module spectrum
   wire [15:0] pc;
   
   reg [7:0] R_cpu_control = 0;
-  //wire loading = R_cpu_control[1];
-  wire loading = !done;
+  wire loading = R_cpu_control[1];
 
-  wire n_hard_reset = pwr_up_reset_n & done;
+  wire n_hard_reset = pwr_up_reset_n & ~R_cpu_control[0];
 
+  wire irq;
   tv80n cpu1 (
     .reset_n(n_hard_reset),
     //.clk(cpuClock), // turbo mode 28MHz
@@ -139,9 +116,10 @@ module spectrum
   );
 
   wire [6:0] R_btn_joy;
+  // TODO: add joystick support, for example an (S)NES controller
   //always @(posedge cpuClock)
   //  R_btn_joy <= btn | { usb_buttons[7],usb_buttons[6],usb_buttons[5],usb_buttons[4],usb_buttons[0],usb_buttons[1],1'b0};
-
+  
   // ===============================================================
   // SPI Slave
   // ===============================================================
@@ -150,13 +128,97 @@ module spectrum
   wire [31:0] spi_ram_addr;
   wire [7:0] spi_ram_di;
   wire [7:0] ramOut;
-  wire [7:0] romOut;
   wire [7:0] spi_ram_do = ramOut;
+
+  wire irq;
+  spi_ram_btn
+  #(
+    .c_sclk_capable_pin(1'b1),
+    .c_addr_bits(32)
+  )
+  spi_ram_btn_inst
+  (
+    .clk(cpuClock),
+    .csn(spi_slave_cs_n_i),
+    .sclk(spi_slave_clk_i),
+    .mosi(spi_slave_mosi_i),
+    .miso(slave_miso),
+    .btn(R_btn_joy),
+    .irq(irq),
+    .wr(spi_ram_wr),
+    .rd(spi_ram_rd),
+    .addr(spi_ram_addr),
+    .data_in(spi_ram_do),
+    .data_out(spi_ram_di)
+  );
+  
+  wire spi_slave_clk_i;
+	wire spi_slave_clk_r;
+	wire spi_slave_clk_f;
+
+	spi_simple_io_in spi_clk (
+		.pad(slave_clk),
+		.val(spi_slave_clk_i),
+		.rise(spi_slave_clk_r),
+		.fall(spi_slave_clk_f),
+		.clk(clk),
+		.rst(!clock_locked)
+	);
+  wire spi_slave_cs_n_i;
+	wire spi_slave_csn_r;
+	wire spi_slave_csn_f;
+
+	spi_simple_io_in spi_cs (
+		.pad(slave_cs_n),
+		.val(spi_slave_cs_n_i),
+		.rise(spi_slave_csn_r),
+		.fall(spi_slave_csn_f),
+		.clk(clk),
+		.rst(!clock_locked)
+	);
+
+  wire spi_slave_mosi_i;
+  wire spi_slave_mosi_r;
+  wire spi_slave_mosi_f;
+
+	spi_simple_io_in spi_mosi (
+		.pad(slave_mosi),
+		.val(spi_slave_mosi_i),
+		.rise(spi_slave_mosi_r),
+		.fall(spi_slave_mosi_f),
+		.clk(clk),
+		.rst(!clock_locked)
+	);
+
+  always @(posedge cpuClock) begin
+    if (spi_ram_wr && spi_ram_addr[31:24] == 8'hFF) begin
+      R_cpu_control <= spi_ram_di;
+    end
+  end
+  
+
+  // ===============================================================
+  // Keyboard input via spi slave 
+  // ===============================================================
+  always @(posedge cpuClock) begin
+    if (spi_ram_wr && spi_ram_addr[31:24] == 8'hF1) begin
+      ps2_key <= {4'b100, spi_ram_di};
+    end
+    if (spi_ram_wr && spi_ram_addr[31:24] == 8'hF2) begin
+      ps2_key <= {4'b110, spi_ram_di};
+    end
+    if (spi_ram_wr && spi_ram_addr[31:24] == 8'hF3) begin
+      ps2_key <= {4'b000, spi_ram_di};
+    end
+    if (spi_ram_wr && spi_ram_addr[31:24] == 8'hF4) begin
+      ps2_key <= {4'b010, spi_ram_di};
+    end
+  end
 
   // ===============================================================
   // Border color and sound
   // ===============================================================
-
+  // TODO: Add sound
   always @(posedge cpuClock) begin
     old_ula_we <= ula_we;
 
@@ -169,11 +231,12 @@ module spectrum
   // ===============================================================
   // ROM
   // ===============================================================
+  wire [7:0] romOut;
   up5k_zx_rom rom_i(
     .clk(clk),
-    .wen(loader_write),
-	  .addr(loading ? loader_write_addr : cpuAddress[13:0]),
-	  .wdata(loader_write_data),
+    .wen(loading ? spi_ram_wr && spi_ram_addr[31:24] == 8'h00 && !n_romCS : 0),
+    .addr(loading ? spi_ram_addr[13:0] : cpuAddress[13:0]),
+    .wdata(spi_ram_di),
     .rdata(romOut)
   );
 
@@ -185,16 +248,15 @@ module spectrum
   wire [7:0] attrOut;
   wire [12:0] attr_addr;
 
-
   wire [15:0] video_addr;
   wire [7:0] videoDataOut;
 
   video_ram 
   vram_i (
     .clk(clk),
-    .we(!n_ramCS & !n_memWR & !n_video_ram_CS),
-    .addr_a(cpuAddress[12:0]),
-    .din_a(cpuDataOut),
+    .we(loading ? spi_ram_wr && spi_ram_addr[31:24] == 8'h00 && !n_ramCS && !n_video_ram_CS : !n_ramCS & !n_memWR & !n_video_ram_CS),
+    .addr_a(loading ? spi_ram_addr[12:0] : cpuAddress[12:0]),
+    .din_a(loading ? spi_ram_di : cpuDataOut),
     .dout_a(videoDataOut),
     .addr_b(vga_addr),
     .dout_b(vidOut)
@@ -203,9 +265,9 @@ module spectrum
   up5k_zx_ram
   ram48 (
     .clk_a(cpuClock),
-    .we_a(!n_ramCS & !n_memWR & n_video_ram_CS),
-    .addr_a(cpuAddress),
-    .din_a(cpuDataOut),
+    .we_a(loading ? spi_ram_wr && spi_ram_addr[31:24] == 8'h00 && !n_ramCS && n_video_ram_CS : !n_ramCS & !n_memWR & n_video_ram_CS),
+    .addr_a(loading ?  spi_ram_addr[15:0] : cpuAddress[15:0]),
+    .din_a(loading ? spi_ram_di : cpuDataOut),
     .dout_a(ramOut)
   );
 
@@ -215,15 +277,7 @@ module spectrum
   wire [4:0]  key_data;
   wire [11:1] Fn;
   wire [2:0]  mod;
-  wire [10:0] ps2_key;
-
-  // Get PS/2 keyboard events
-  /*ps2 ps2_kbd (
-     .clk(clk),
-     .ps2_clk(ps2Clk),
-     .ps2_data(ps2Data),
-     .ps2_key(ps2_key)
-  );
+  reg [10:0] ps2_key = 0;
 
   // Keyboard matrix
   keyboard the_keyboard (
@@ -234,7 +288,7 @@ module spectrum
     .key_data(key_data),
     .Fn(Fn),
     .mod(mod)
-  );*/
+  );
 
   // ===============================================================
   // VGA
@@ -264,8 +318,8 @@ module spectrum
 
   assign n_kbdCS = cpuAddress[7:0] == 8'HFE && n_ioRD == 1'b0 ? 1'b0 : 1'b1;
   assign n_joyCS = cpuAddress[7:0] == 8'd31 && n_ioRD == 1'b0 ? 1'b0 : 1'b1; // kempston joystick
-  assign n_romCS = cpuAddress[15:14] != 0;
-  assign n_video_ram_CS = ~(cpuAddress >= 16'h4000 && cpuAddress <= 16'h5AFF);
+  assign n_romCS = loading == 0 ? cpuAddress[15:14] != 0 : spi_ram_addr[15:14] != 0;
+  assign n_video_ram_CS = loading == 0 ? ~(cpuAddress >= 16'h4000 && cpuAddress <= 16'h5AFF) : ~(spi_ram_addr[15:0] >= 16'h4000 && spi_ram_addr[15:0] <= 16'h5AFF);
   assign n_ramCS = !n_romCS;
 
   // ===============================================================
@@ -274,22 +328,75 @@ module spectrum
 
   assign cpuDataIn =  n_kbdCS == 1'b0 ? {3'b111, key_data} :
                       n_joyCS == 1'b0 ? {2'b0, R_btn_joy[2], R_btn_joy[1], R_btn_joy[3], R_btn_joy[4], R_btn_joy[5], R_btn_joy[6]} : // x x (x or FIRE2 on modified hardware) FIRE1 UP DOWN LEFT RIGHT
-                      n_romCS == 0 ? romOut : 
-                      n_video_ram_CS == 0 ? videoDataOut : ramOut;
+                      n_romCS == 0 ? romOut :
+                      n_video_ram_CS == 0 ? videoDataOut :
+                      ramOut;
 
   // ===============================================================
   // CPU clock enable
   // ===============================================================
-   
-  always @(posedge cpuClock) begin
-      cpuClockCount <= cpuClockCount + 1;
-  end
-
-  assign cpuClockEnable = cpuClockCount[2]; // 3.5Mhz
+  // gives us ~3.5 Mhz with 60/40 duty cycle from 25.125 Mhz
+  clock_div clock_div_i (
+    .i_clk(clk),
+    .i_rst(clock_locked),
+    .i_clk_divider(4'd7),
+    .o_clk(cpuClockEnable)
+  );
 
   // ===============================================================
   // Leds
   // ===============================================================
-  assign LED0 = done;
+  assign LED0 = R_cpu_control[0];
+  assign LED1 = R_cpu_control[1];
 
 endmodule
+
+module spi_simple_io_in (
+	input  wire pad,
+	output wire val,
+	output reg  rise,
+	output reg  fall,
+	input  wire clk,
+	input  wire rst
+);
+`ifndef SIM
+	// Signals
+	wire iob_out;
+	reg val_i;
+
+	// IOB
+	SB_IO #(
+		.PIN_TYPE(6'b000000),
+		.PULLUP(1'b0),
+		.NEG_TRIGGER(1'b0),
+		.IO_STANDARD("SB_LVCMOS")
+	) cs_n_iob_I (
+		.PACKAGE_PIN(pad),
+		.CLOCK_ENABLE(1'b1),
+		.INPUT_CLK(clk),
+//		.OUTPUT_CLK(1'b0),
+		.OUTPUT_ENABLE(1'b0),
+		.D_OUT_0(1'b0),
+		.D_OUT_1(1'b0),
+		.D_IN_0(iob_out),
+		.D_IN_1()
+	);
+
+	// Value and transition registers
+	always @(posedge clk or posedge rst)
+		if (rst) begin
+			val_i <= 1'b0;
+			rise  <= 1'b0;
+			fall  <= 1'b0;
+		end else begin
+			val_i <=  iob_out;
+			rise  <=  iob_out & ~val_i;
+			fall  <= ~iob_out &  val_i;
+		end
+
+	assign val = val_i;
+`else
+  assign val = pad;
+`endif
+
+endmodule // spi_simple_io_in

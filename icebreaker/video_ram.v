@@ -8,7 +8,7 @@ module video_ram(
   output reg [7:0] dout_b
 );
 
-reg [7:0] mem[0:6910];
+reg [7:0] mem[0:6911];
 
 always @(posedge clk) begin
   if (we)

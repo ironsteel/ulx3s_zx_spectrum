@@ -1,6 +1,6 @@
 set_io clock_12 35
-set_io LED0 37
-set_io LED1 11
+set_io LED0 26
+set_io LED1 21
 
 set_io VGA_CK 38
 set_io VGA_DE 32
@@ -19,30 +19,9 @@ set_io VGA_R[2] 3
 set_io VGA_R[1] 2
 set_io VGA_R[0] 48
 
-#set_io -nowarn AUDIO_O 19
-#set_io joy_strobe 25
-#set_io joy_clock 27
-#set_io joy_data 21
-
-set_io flash_sck 15
-set_io flash_csn 16
-set_io flash_mosi 14
-set_io flash_miso 17
+set_io slave_clk 15
+set_io slave_mosi 14
+set_io slave_miso 17
+set_io slave_cs_n 11
 
 set_io btn 10
-
-#set_io buttons[0] 10
-#set_io buttons[1] 20
-#set_io buttons[2] 19
-#set_io buttons[3] 18
-#set_io buttons[4] 32
-
-#set_io leds[0] 27
-#set_io leds[1] 25
-#set_io leds[2] 21
-#set_io leds[3] 19
-#set_io leds[4] 26
-#set_io leds[5] 23
-#set_io leds[6] 20
-#set_io leds[7] 18
-

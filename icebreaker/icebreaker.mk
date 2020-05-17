@@ -10,12 +10,9 @@ prog: $(BUILDDIR)/toplevel.bit
 testbench: $(VERILOG) $(VERILOG_SIM)
 	iverilog -Wtimescale -DSIM=1 -o testbench $^ $(shell yosys-config --datdir/ice40/cells_sim.v)
 
-tb: testbench
-	vvp -N testbench -fst +vcd
-
 $(BUILDDIR)/toplevel.json: $(VERILOG)
 	mkdir -p $(BUILDDIR)
-	yosys -p  "synth_ice40 -abc9 -json $@" $^
+	yosys -p  "synth_ice40 -noflatten -json $@" $^
 
 $(BUILDDIR)/toplevel.asc: $(PIN_DEF) $(BUILDDIR)/toplevel.json
 	nextpnr-ice40 --up5k --timing-allow-fail --json $(filter-out $<,$^) --pcf $< --asc $@

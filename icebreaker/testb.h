@@ -90,7 +90,41 @@ public:
 			m_trace->flush();
 		}
 	}
+        
+        void delay_cycles(uint64_t cycles) {
+            while (cycles > 0) {
+		m_tickcount++;
+		eval();
+		if (m_trace) m_trace->dump((vluint64_t)(10*m_tickcount-2));
+		m_core->clock_12 = 1;
+		eval();
+		if (m_trace) m_trace->dump((vluint64_t)(10*m_tickcount));
+		m_core->clock_12 = 0;
+		eval();
+		if (m_trace) {
+			m_trace->dump((vluint64_t)(10*m_tickcount+5));
+			m_trace->flush();
+		}
+                cycles--;
+            }
+        }
+        
+        void spi_clk(int val) {
+            m_core->spi_clk = val;
+        }
+        void spi_csn(int val) {
+            m_core->spi_csn = val;
+        }
+        void spi_mosi(int val) {
+            m_core->spi_mosi = val;
+        }
+        void ps2_clk(int val) {
+            m_core->ps2clk = val;
+        }
 
+        void ps2_data(int val) {
+            m_core->ps2data = val;
+        }
 	unsigned long	tickcount(void) {
 		return m_tickcount;
 	}
